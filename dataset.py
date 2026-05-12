@@ -57,63 +57,65 @@ class Branch1_datasets(Dataset):
 
 
 class Branch2_datasets(Dataset):
-    def __init__(self, path_Data, config, train=True, test=False):
+    def __init__(self, path_Data, config, train=True, test=False, return_image_name=False):
         super(Branch2_datasets, self)
+
+        self.return_image_name = return_image_name or test
+
         if train:
-            images_list = sorted(os.listdir(path_Data + 'train/images/'))
-            masks_list = sorted(os.listdir(path_Data + 'train/masks/'))
-            features_list = sorted(os.listdir(path_Data + 'train/feature/'))
-            self.data = []
-            for i in range(len(images_list)):
-                img_path = path_Data + 'train/images/' + images_list[i]
-                msk_path = path_Data + 'train/masks/' + masks_list[i]
-                feature_path = path_Data + 'train/feature/' + features_list[i]
-                self.data.append((img_path, msk_path, feature_path))
+            split = 'train'
             self.transformer = config.train_transformer
+        elif test:
+            split = 'test'
+            self.transformer = config.test_transformer
         else:
-            if test:
-                images_list = sorted(os.listdir(path_Data + 'test/images/'))
-                masks_list = sorted(os.listdir(path_Data + 'test/masks/'))
-                feature_list = sorted(os.listdir(path_Data + 'test/feature/'))
-                self.data = []
-                for i in range(len(images_list)):
-                    img_path = path_Data + 'test/images/' + images_list[i]
-                    mask_path = path_Data + 'test/masks/' + masks_list[i]
-                    feature_path = path_Data + 'test/feature/' + feature_list[i]
-                    self.data.append((img_path, mask_path, feature_path))
-                self.transformer = config.test_transformer
-            else:
-                images_list = sorted(os.listdir(path_Data + 'val/images/'))
-                masks_list = sorted(os.listdir(path_Data + 'val/masks/'))
-                feature_list = sorted(os.listdir(path_Data + 'val/feature/'))
-                self.data = []
-                for i in range(len(images_list)):
-                    img_path = path_Data + 'val/images/' + images_list[i]
-                    mask_path = path_Data + 'val/masks/' + masks_list[i]
-                    feature_path = path_Data + 'val/feature/' + feature_list[i]
-                    self.data.append((img_path, mask_path, feature_path))
-                self.transformer = config.test_transformer
+            split = 'val'
+            self.transformer = config.test_transformer
+
+        image_dir = path_Data + f'{split}/images/'
+        mask_dir = path_Data + f'{split}/masks/'
+        feature_dir = path_Data + f'{split}/feature/'
+
+        image_files = sorted(os.listdir(image_dir))
+        mask_map = {os.path.splitext(file_name)[0]: file_name for file_name in os.listdir(mask_dir)}
+        feature_map = {os.path.splitext(file_name)[0]: file_name for file_name in os.listdir(feature_dir)}
+
+        self.data = []
+        missing_masks = []
+        missing_features = []
+        for image_file in image_files:
+            stem = os.path.splitext(image_file)[0]
+            mask_file = mask_map.get(stem)
+            feature_file = feature_map.get(stem)
+
+            if mask_file is None:
+                missing_masks.append(image_file)
+                continue
+            if feature_file is None:
+                missing_features.append(image_file)
+                continue
+
+            img_path = image_dir + image_file
+            msk_path = mask_dir + mask_file
+            feature_path = feature_dir + feature_file
+            self.data.append((img_path, msk_path, feature_path, image_file))
+
+        if missing_masks:
+            raise FileNotFoundError(f'Missing masks for split {split}: {missing_masks[:5]}')
+        if missing_features:
+            raise FileNotFoundError(f'Missing feature files for split {split}: {missing_features[:5]}')
 
     def __getitem__(self, indx):
-        try:
-            img_path, msk_path, feature_path = self.data[indx]
-            img = np.array(Image.open(img_path).convert('RGB'))
-            msk = np.expand_dims(np.array(Image.open(msk_path).convert('L')), axis=2) / 255
-            feature = torch.load(feature_path, map_location='cpu')
+        img_path, msk_path, feature_path, image_file = self.data[indx]
+        img = np.array(Image.open(img_path).convert('RGB'))
+        msk = np.expand_dims(np.array(Image.open(msk_path).convert('L')), axis=2) / 255
+        feature = torch.load(feature_path, map_location='cpu')
 
-            if self.transformer is not None:
-                img, msk = self.transformer((img, msk))
-                #feature = feature.to('cpu')
-            return img, msk, feature 
-        except:
-            img_path, msk_path = self.data[indx]
-            img = np.array(Image.open(img_path).convert('RGB'))
-            msk = np.expand_dims(np.array(Image.open(msk_path).convert('L')), axis=2) / 255
-
-            if self.transformer is not None:
-                img, msk = self.transformer((img, msk))
-
-            return img, msk
+        if self.transformer is not None:
+            img, msk, feature = self.transformer((img, msk, feature))
+        if self.return_image_name:
+            return img, msk, feature, image_file
+        return img, msk, feature
 
     def __len__(self):
         return len(self.data)

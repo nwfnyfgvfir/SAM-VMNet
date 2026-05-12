@@ -131,7 +131,15 @@ def test_one_epoch(test_loader,
     with torch.no_grad():
         for i, data in enumerate(tqdm(test_loader)):
 
-            img, msk, feature = data
+            if len(data) == 4:
+                img, msk, feature, image_name = data
+                if isinstance(image_name, (list, tuple)):
+                    output_filename = image_name[0]
+                else:
+                    output_filename = image_name
+            else:
+                img, msk, feature = data
+                output_filename = None
 
             img = img.to(device, non_blocking=True).float()
             msk = msk.to(device, non_blocking=True).float()
@@ -151,7 +159,7 @@ def test_one_epoch(test_loader,
             #     # save_prediction(out, i, '/tmp/pycharm_project_859/VM-UNet/')
             #     save_imgs(img, msk, out, i, config.work_dir + 'outputs/', config.datasets, config.threshold, test_data_name=test_data_name)
             save_imgs(img, msk, out, i, config.work_dir + 'outputs/', config.datasets, config.threshold,
-                      test_data_name=test_data_name)
+                      test_data_name=test_data_name, output_filename=output_filename)
         preds = np.array(preds).reshape(-1)
         gts = np.array(gts).reshape(-1)
 

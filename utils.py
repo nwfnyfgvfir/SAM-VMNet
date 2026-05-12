@@ -238,8 +238,8 @@ def get_scheduler(config, optimizer):
     return scheduler
 
 
-def save_imgs(img, msk, msk_pred, i, save_path, datasets, threshold=0.5, test_data_name=None):
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+def save_imgs(img, msk, msk_pred, i, save_path, datasets, threshold=0.5, test_data_name=None, output_filename=None):
+    os.makedirs(save_path, exist_ok=True)
 
     if datasets == 'retinal':
         pred_mask = np.squeeze(msk_pred, axis=0)
@@ -251,7 +251,9 @@ def save_imgs(img, msk, msk_pred, i, save_path, datasets, threshold=0.5, test_da
     plt.axis('off')  # 移除坐标轴
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)  # 移除边距
 
-    if test_data_name is not None:
+    if output_filename is not None:
+        filename = output_filename
+    elif test_data_name is not None:
         filename = f"{test_data_name}_{i}.png"
     else:
         filename = f"{i}.png"
@@ -267,6 +269,9 @@ class myToTensor:
     def __init__(self):
         pass
     def __call__(self, data):
+        if len(data) == 3:
+            image, mask, feature = data
+            return torch.tensor(image).permute(2,0,1), torch.tensor(mask).permute(2,0,1), feature
         image, mask = data
         return torch.tensor(image).permute(2,0,1), torch.tensor(mask).permute(2,0,1)
 
@@ -276,6 +281,9 @@ class myResize:
         self.size_h = size_h
         self.size_w = size_w
     def __call__(self, data):
+        if len(data) == 3:
+            image, mask, feature = data
+            return TF.resize(image, [self.size_h, self.size_w]), TF.resize(mask, [self.size_h, self.size_w]), feature
         image, mask = data
         return TF.resize(image, [self.size_h, self.size_w]), TF.resize(mask, [self.size_h, self.size_w])
 
@@ -284,6 +292,11 @@ class myRandomHorizontalFlip:
     def __init__(self, p=0.5):
         self.p = p
     def __call__(self, data):
+        if len(data) == 3:
+            image, mask, feature = data
+            if random.random() < self.p:
+                return TF.hflip(image), TF.hflip(mask), TF.hflip(feature)
+            return image, mask, feature
         image, mask = data
         if random.random() < self.p: return TF.hflip(image), TF.hflip(mask)
         else: return image, mask
@@ -293,6 +306,11 @@ class myRandomVerticalFlip:
     def __init__(self, p=0.5):
         self.p = p
     def __call__(self, data):
+        if len(data) == 3:
+            image, mask, feature = data
+            if random.random() < self.p:
+                return TF.vflip(image), TF.vflip(mask), TF.vflip(feature)
+            return image, mask, feature
         image, mask = data
         if random.random() < self.p: return TF.vflip(image), TF.vflip(mask)
         else: return image, mask
@@ -303,6 +321,11 @@ class myRandomRotation:
         self.angle = random.uniform(degree[0], degree[1])
         self.p = p
     def __call__(self, data):
+        if len(data) == 3:
+            image, mask, feature = data
+            if random.random() < self.p:
+                return TF.rotate(image, self.angle), TF.rotate(mask, self.angle), TF.rotate(feature, self.angle)
+            return image, mask, feature
         image, mask = data
         if random.random() < self.p: return TF.rotate(image,self.angle), TF.rotate(mask,self.angle)
         else: return image, mask
@@ -318,6 +341,12 @@ class myNormalize:
                 self.std = 32.022
 
     def __call__(self, data):
+        if len(data) == 3:
+            img, msk, feature = data
+            img_normalized = (img-self.mean)/self.std
+            img_normalized = ((img_normalized - np.min(img_normalized))
+                                / (np.max(img_normalized)-np.min(img_normalized))) * 255.
+            return img_normalized, msk, feature
         img, msk = data
         img_normalized = (img-self.mean)/self.std
         img_normalized = ((img_normalized - np.min(img_normalized))

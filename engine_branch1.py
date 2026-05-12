@@ -47,7 +47,8 @@ def train_one_epoch(train_loader,
         if iter % config.print_interval == 0:
             log_info = f'train: epoch {epoch}, iter:{iter}, loss: {np.mean(loss_list):.4f}, lr: {now_lr}'
             print(log_info)
-            logger.info(log_info)
+            if logger is not None:
+                logger.info(log_info)
     scheduler.step() 
     return step
 

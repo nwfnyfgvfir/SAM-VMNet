@@ -10,7 +10,7 @@ from dataset import Branch2_datasets
 from tensorboardX import SummaryWriter
 from models.vmunet.samvmnet import SAMVMNet
 from engine_branch2 import *
-from feature_processor import process_images
+from feature_processor import generate_branch1_pred_masks, process_images, validate_branch2_inputs
 
 import matplotlib.pyplot as plt
 
@@ -36,7 +36,7 @@ def parse_args():
 
 def main(config, args):
 
-    config.work_dir = args.work_dir
+    config.work_dir = args.work_dir if args.work_dir.endswith('/') else args.work_dir + '/'
     config.data_path = args.data_path
     config.batch_size = args.batch_size
     config.gpu_id = args.gpu_id
@@ -51,8 +51,12 @@ def main(config, args):
     set_seed(config.seed)
     torch.cuda.empty_cache()
 
+    print('#----------Generating Branch1 pred_masks----------#')
+    generate_branch1_pred_masks(config.data_path, branch1_model_path, device)
+
     print('#----------Processing images----------#')
     process_images(config.data_path, medsam_model_path)
+    validate_branch2_inputs(config.data_path)
 
     print('#----------Creating logger----------#')
     sys.path.append(config.work_dir + '/')

@@ -27,7 +27,7 @@ def parse_args():
 
 def main(config, args):
     print('#----------Creating logger----------#')
-    config.work_dir = args.work_dir
+    config.work_dir = args.work_dir if args.work_dir.endswith('/') else args.work_dir + '/'
     config.data_path = args.data_path
     config.batch_size = args.batch_size
     config.gpu_id = args.gpu_id

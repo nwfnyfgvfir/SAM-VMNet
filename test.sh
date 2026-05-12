@@ -6,6 +6,6 @@
 # ==========================================
 python test.py \
     --data_path "./data/vessel/" \
-    --pretrained_weight "./result_branch1/checkpoints/best-epoch160-loss0.2211.pth" \
-    --device "cuda:7" \
-    --output_dir "./data/vessel/test"
+    --pretrained_weight "./pre_trained_weights/best-epoch142-loss0.3488.pth" \
+    --device "cuda:0" \
+    --output_dir "./data/vessel/test/pred_masks"
