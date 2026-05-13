@@ -169,12 +169,17 @@ def process_images(data_path, model_path, splits=SPLITS):
         os.makedirs(output_dir, exist_ok=True)
 
         print(f'Processing {split} Dataset...')
+        empty_prompt_count = 0
         for image_file, image_path, mask_path in tqdm(pairs, total=len(pairs)):
             output_file = os.path.join(output_dir, f'{Path(image_file).stem}.pt')
 
             _validate_mask_size(image_path, mask_path)
-            medsam_result = medsam_point(image_path, mask_path, model_path)
+            medsam_result, used_prompt = medsam_point(image_path, mask_path, model_path)
+            if not used_prompt:
+                empty_prompt_count += 1
             torch.save(medsam_result, output_file)
+
+        print(f'{split} MedSAM fallback on {empty_prompt_count}/{len(pairs)} empty pred_masks')
 
 
 def validate_branch2_inputs(data_path, splits=SPLITS):

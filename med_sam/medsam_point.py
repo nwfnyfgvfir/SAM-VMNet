@@ -30,6 +30,7 @@ def medsam_point(imagepath, maskpath, checkpoint_path, device="cuda:0"):
 
     Returns:
         tezhengxiangliang: 特征向量
+        used_prompt: 是否使用了前景点提示
     """
     # 读取图像
     image = cv2.imread(imagepath)
@@ -63,7 +64,8 @@ def medsam_point(imagepath, maskpath, checkpoint_path, device="cuda:0"):
 
     # 检查是否找到白色区域
     if len(x_coords) == 0:
-        raise ValueError(f"在掩码 {maskpath} 中未找到白色区域")
+        tezhengxiangliang = predictor.Returnfeatures()
+        return tezhengxiangliang, False
 
     # 将坐标组合成一个numpy数组，每个坐标是一个[x, y]格式的列表
     points = np.array(list(zip(x_coords, y_coords)))
@@ -91,4 +93,4 @@ def medsam_point(imagepath, maskpath, checkpoint_path, device="cuda:0"):
     )
 
     tezhengxiangliang = predictor.Returnfeatures()
-    return tezhengxiangliang
+    return tezhengxiangliang, True
