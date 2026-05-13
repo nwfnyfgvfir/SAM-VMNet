@@ -3,6 +3,14 @@ import torch
 from torch import nn
 from configs.config_setting import setting_config
 
+
+def _load_checkpoint(checkpoint_path):
+    try:
+        return torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    except TypeError:
+        return torch.load(checkpoint_path, map_location='cpu')
+
+
 class VMUNet(nn.Module):
     def __init__(self, 
                  input_channels=3, 
@@ -36,7 +44,7 @@ class VMUNet(nn.Module):
     def load_from(self):
         if self.load_ckpt_path is not None:
             model_dict = self.vmunet.state_dict()
-            modelCheckpoint = torch.load(self.load_ckpt_path)
+            modelCheckpoint = _load_checkpoint(self.load_ckpt_path)
             pretrained_dict = modelCheckpoint['model']
             # 过滤操作
             new_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict.keys()}
@@ -50,7 +58,6 @@ class VMUNet(nn.Module):
             print("encoder loaded finished!")
 
             model_dict = self.vmunet.state_dict()
-            modelCheckpoint = torch.load(self.load_ckpt_path)
             pretrained_odict = modelCheckpoint['model']
             pretrained_dict = {}
             for k, v in pretrained_odict.items():

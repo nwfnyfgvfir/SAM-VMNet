@@ -3,6 +3,14 @@ import torch
 from torch import nn
 from configs.config_setting import setting_config
 
+
+def _load_checkpoint(checkpoint_path):
+    try:
+        return torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    except TypeError:
+        return torch.load(checkpoint_path, map_location='cpu')
+
+
 class SAMVMNet(nn.Module):
     def __init__(self,
                  input_channels=3,
@@ -40,7 +48,7 @@ class SAMVMNet(nn.Module):
     def load_from(self):
         if self.load_ckpt_path is not None:
             model_dict = self.samvmnet.state_dict()
-            modelCheckpoint = torch.load(self.load_ckpt_path)
+            modelCheckpoint = _load_checkpoint(self.load_ckpt_path)
             try:
                 pretrained_dict = modelCheckpoint['model']
             except:
@@ -62,7 +70,6 @@ class SAMVMNet(nn.Module):
             print("encoder loaded finished!")
 
             model_dict = self.samvmnet.state_dict()
-            modelCheckpoint = torch.load(self.load_ckpt_path)
             try:
                 pretrained_odict = modelCheckpoint['model']
             except:
