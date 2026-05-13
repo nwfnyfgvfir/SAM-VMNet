@@ -100,9 +100,10 @@ def main(config, args):
     scheduler = get_scheduler(config, optimizer)
 
     print('#----------Set other params----------#')
-    min_loss = 999
+    best_loss = float('inf')
+    best_dice = -1.0
+    best_epoch = 1
     start_epoch = 1
-    min_epoch = 1
 
     if os.path.exists(resume_model):
         print('#----------Resume Model and Other params----------#')
@@ -112,9 +113,12 @@ def main(config, args):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         saved_epoch = checkpoint['epoch']
         start_epoch += saved_epoch
-        min_loss, min_epoch, loss = checkpoint['min_loss'], checkpoint['min_epoch'], checkpoint['loss']
+        best_loss = checkpoint.get('best_loss', checkpoint.get('min_loss', best_loss))
+        best_dice = checkpoint.get('best_dice', best_dice)
+        best_epoch = checkpoint.get('best_epoch', checkpoint.get('min_epoch', best_epoch))
+        loss = checkpoint['loss']
 
-        log_info = f'resuming model from {resume_model}. resume_epoch: {saved_epoch}, min_loss: {min_loss:.4f}, min_epoch: {min_epoch}, loss: {loss:.4f}'
+        log_info = f'resuming model from {resume_model}. resume_epoch: {saved_epoch}, best_loss: {best_loss:.4f}, best_dice: {best_dice:.4f}, best_epoch: {best_epoch}, loss: {loss:.4f}'
         logger.info(log_info)
 
     step = 0
@@ -137,7 +141,7 @@ def main(config, args):
             device
         )
 
-        loss = val_one_epoch(
+        val_metrics = val_one_epoch(
             val_loader,
             model,
             criterion,
@@ -146,17 +150,23 @@ def main(config, args):
             config,
             device
         )
+        loss = val_metrics['loss']
+        dice = val_metrics['f1_or_dsc']
 
-        if loss < min_loss:
+        if dice > best_dice or (dice == best_dice and loss < best_loss):
             torch.save(model.state_dict(), os.path.join(checkpoint_dir, 'best.pth'))
-            min_loss = loss
-            min_epoch = epoch
+            best_loss = loss
+            best_dice = dice
+            best_epoch = epoch
 
         torch.save(
             {
                 'epoch': epoch,
-                'min_loss': min_loss,
-                'min_epoch': min_epoch,
+                'best_loss': best_loss,
+                'best_dice': best_dice,
+                'best_epoch': best_epoch,
+                'min_loss': best_loss,
+                'min_epoch': best_epoch,
                 'loss': loss,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
@@ -167,7 +177,7 @@ def main(config, args):
         print('#----------Testing----------#')
         best_weight = torch.load(config.work_dir + 'checkpoints/best.pth', map_location=torch.device('cpu'))
         model.load_state_dict(best_weight)
-        loss = test_one_epoch(
+        test_one_epoch(
             test_loader,
             model,
             criterion,
@@ -177,7 +187,7 @@ def main(config, args):
         )
         os.rename(
             os.path.join(checkpoint_dir, 'best.pth'),
-            os.path.join(checkpoint_dir, f'best-epoch{min_epoch}-loss{min_loss:.4f}.pth')
+            os.path.join(checkpoint_dir, f'best-epoch{best_epoch}-loss{best_loss:.4f}.pth')
         )
 
 

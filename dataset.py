@@ -13,38 +13,48 @@ from scipy import ndimage
 from PIL import Image
 
 
+def _collect_image_mask_pairs(image_dir, mask_dir):
+    image_files = sorted(os.listdir(image_dir))
+    mask_map = {os.path.splitext(file_name)[0]: file_name for file_name in os.listdir(mask_dir)}
+
+    pairs = []
+    missing_masks = []
+    for image_file in image_files:
+        stem = os.path.splitext(image_file)[0]
+        mask_file = mask_map.get(stem)
+        if mask_file is None:
+            missing_masks.append(image_file)
+            continue
+        pairs.append([
+            os.path.join(image_dir, image_file),
+            os.path.join(mask_dir, mask_file),
+        ])
+
+    if missing_masks:
+        raise FileNotFoundError(f'Missing masks for {image_dir}: {missing_masks[:5]}')
+    if len(pairs) != len(image_files):
+        raise ValueError(f'Image/mask pair count mismatch: {image_dir} vs {mask_dir}')
+
+    return pairs
+
+
 class Branch1_datasets(Dataset):
     def __init__(self, path_Data, config, train=True, test=False):
         super(Branch1_datasets, self)
         if train:
-            images_list = sorted(os.listdir(path_Data+'train/images/'))
-            masks_list = sorted(os.listdir(path_Data+'train/masks/'))
-            self.data = []
-            for i in range(len(images_list)):
-                img_path = path_Data+'train/images/' + images_list[i]
-                mask_path = path_Data+'train/masks/' + masks_list[i]
-                self.data.append([img_path, mask_path])
+            split = 'train'
             self.transformer = config.train_transformer
+        elif test:
+            split = 'test'
+            self.transformer = config.test_transformer
         else:
-            if test:
-                images_list = sorted(os.listdir(path_Data+'test/images/'))
-                masks_list = sorted(os.listdir(path_Data+'test/masks/'))
-                self.data = []
-                for i in range(len(images_list)):
-                    img_path = path_Data+'test/images/' + images_list[i]
-                    mask_path = path_Data+'test/masks/' + masks_list[i]
-                    self.data.append([img_path, mask_path])
-                self.transformer = config.test_transformer
-            else:
-                images_list = sorted(os.listdir(path_Data+'val/images/'))
-                masks_list = sorted(os.listdir(path_Data+'val/masks/'))
-                self.data = []
-                for i in range(len(images_list)):
-                    img_path = path_Data+'val/images/' + images_list[i]
-                    mask_path = path_Data+'val/masks/' + masks_list[i]
-                    self.data.append([img_path, mask_path])
-                self.transformer = config.test_transformer
-        
+            split = 'val'
+            self.transformer = config.test_transformer
+
+        image_dir = path_Data + f'{split}/images/'
+        mask_dir = path_Data + f'{split}/masks/'
+        self.data = _collect_image_mask_pairs(image_dir, mask_dir)
+
     def __getitem__(self, indx):
         img_path, msk_path = self.data[indx]
         img = np.array(Image.open(img_path).convert('RGB'))
@@ -185,5 +195,4 @@ class Synapse_dataset(Dataset):
             sample = self.transform(sample)
         sample['case_name'] = self.sample_list[idx].strip('\n')
         return sample
-        
-    
+

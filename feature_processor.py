@@ -98,10 +98,13 @@ def _load_branch1_checkpoint(model, checkpoint_path):
     model.load_state_dict(filtered_state_dict, strict=False)
 
 
-def _save_raw_prediction_mask(prediction, output_path, output_size):
-    binary_prediction = np.where(prediction > setting_config.threshold, 255, 0).astype(np.uint8)
-    resized_prediction = Image.fromarray(binary_prediction).resize(output_size, resample=Image.NEAREST)
-    resized_prediction.save(output_path)
+def _save_prediction_outputs(prediction, binary_output_path, probability_output_path, output_size):
+    probability_prediction = np.clip(prediction, 0, 1)
+    binary_prediction = np.where(probability_prediction > setting_config.threshold, 255, 0).astype(np.uint8)
+    probability_image = (probability_prediction * 255).astype(np.uint8)
+
+    Image.fromarray(binary_prediction).resize(output_size, resample=Image.NEAREST).save(binary_output_path)
+    Image.fromarray(probability_image).resize(output_size, resample=Image.BILINEAR).save(probability_output_path)
 
 
 def generate_branch1_pred_masks(data_path, branch1_model_path, device, splits=SPLITS, output_dirs=None):
@@ -114,11 +117,18 @@ def generate_branch1_pred_masks(data_path, branch1_model_path, device, splits=SP
             split_dir = os.path.join(data_path, split)
             pairs = _collect_named_pairs(split_dir, 'masks')
             output_dir = output_dirs.get(split) if output_dirs and split in output_dirs else os.path.join(split_dir, 'pred_masks')
+            probability_output_dir = f'{output_dir}_prob'
             os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(probability_output_dir, exist_ok=True)
 
             print(f'Generating Branch1 pred_masks for {split}...')
+            prediction_mins = []
+            prediction_maxs = []
+            prediction_means = []
+            prediction_positive_ratios = []
             for image_file, image_path, mask_path in tqdm(pairs, total=len(pairs)):
                 output_path = os.path.join(output_dir, image_file)
+                probability_output_path = os.path.join(probability_output_dir, image_file)
 
                 image = np.array(Image.open(image_path).convert('RGB'))
                 mask = np.expand_dims(np.array(Image.open(mask_path).convert('L')), axis=2) / 255
@@ -130,7 +140,17 @@ def generate_branch1_pred_masks(data_path, branch1_model_path, device, splits=SP
                 if isinstance(output, tuple):
                     output = output[0]
                 prediction = output.squeeze().detach().cpu().numpy()
-                _save_raw_prediction_mask(prediction, output_path, (original_width, original_height))
+                prediction_mins.append(float(prediction.min()))
+                prediction_maxs.append(float(prediction.max()))
+                prediction_means.append(float(prediction.mean()))
+                prediction_positive_ratios.append(float((prediction >= setting_config.threshold).mean()))
+                _save_prediction_outputs(prediction, output_path, probability_output_path, (original_width, original_height))
+
+            print(
+                f'{split} Branch1 predictions: min={min(prediction_mins):.4f}, max={max(prediction_maxs):.4f}, '
+                f'mean={np.mean(prediction_means):.4f}, positive_ratio@{setting_config.threshold}={np.mean(prediction_positive_ratios):.6f}'
+            )
+            print(f'Saved binary masks to {output_dir} and probability maps to {probability_output_dir}')
 
 
 def _validate_mask_size(image_path, mask_path):

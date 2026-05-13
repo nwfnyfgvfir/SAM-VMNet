@@ -13,7 +13,7 @@ def parse_args():
     parser.add_argument('--data_path', type=str, required=True, help='Path to dataset root, e.g. ./data/vessel/')
     parser.add_argument('--pretrained_weight', type=str, required=True, help='Path to pretrained Branch1 weights')
     parser.add_argument('--device', type=str, default='cuda:0', help='Device to use (e.g., cuda:0, cuda:1, cpu)')
-    parser.add_argument('--output_dir', type=str, default='./test_results', help='Output directory for raw prediction masks')
+    parser.add_argument('--output_dir', type=str, default='./test_results', help='Output directory for thresholded prediction masks')
     return parser.parse_args()
 
 
@@ -27,7 +27,8 @@ def test_with_pretrained():
 
     print(f'#----------Loading pretrained weights from {pretrained_weight}----------#')
     print(f'#----------Using device: {device}----------#')
-    print(f'#----------Saving raw prediction masks to {output_dir}----------#')
+    print(f'#----------Saving thresholded prediction masks to {output_dir}----------#')
+    print(f'#----------Saving probability maps to {output_dir}_prob----------#')
 
     os.makedirs(output_dir, exist_ok=True)
     generate_branch1_pred_masks(

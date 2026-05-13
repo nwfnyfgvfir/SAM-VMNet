@@ -208,14 +208,14 @@ def get_scheduler(config, optimizer):
         )
     elif config.sch == 'ReduceLROnPlateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, 
-            mode = config.mode, 
-            factor = config.factor, 
-            patience = config.patience, 
-            threshold = config.threshold, 
-            threshold_mode = config.threshold_mode, 
-            cooldown = config.cooldown, 
-            min_lr = config.min_lr, 
+            optimizer,
+            mode = config.mode,
+            factor = config.factor,
+            patience = config.patience,
+            threshold = config.threshold,
+            threshold_mode = config.threshold_mode,
+            cooldown = config.cooldown,
+            min_lr = config.min_lr,
             eps = config.eps
         )
     elif config.sch == 'CosineAnnealingWarmRestarts':
@@ -241,15 +241,12 @@ def get_scheduler(config, optimizer):
 def save_imgs(img, msk, msk_pred, i, save_path, datasets, threshold=0.5, test_data_name=None, output_filename=None):
     os.makedirs(save_path, exist_ok=True)
 
+    probability_map = np.squeeze(msk_pred, axis=0)
+    probability_map = np.clip(probability_map, 0, 1)
     if datasets == 'retinal':
-        pred_mask = np.squeeze(msk_pred, axis=0)
+        pred_mask = probability_map
     else:
-        pred_mask = np.where(np.squeeze(msk_pred, axis=0) > threshold, 1, 0)
-
-    plt.figure(figsize=(6, 6))
-    plt.imshow(pred_mask, cmap='gray')
-    plt.axis('off')  # 移除坐标轴
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)  # 移除边距
+        pred_mask = np.where(probability_map > threshold, 1, 0)
 
     if output_filename is not None:
         filename = output_filename
@@ -258,10 +255,20 @@ def save_imgs(img, msk, msk_pred, i, save_path, datasets, threshold=0.5, test_da
     else:
         filename = f"{i}.png"
 
-    plt.savefig(os.path.join(save_path, filename),
-                bbox_inches='tight',
-                pad_inches=0,
-                dpi=100)
+    plt.figure(figsize=(6, 6))
+    plt.imshow(pred_mask, cmap='gray')
+    plt.axis('off')
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
+    plt.savefig(os.path.join(save_path, filename), bbox_inches='tight', pad_inches=0, dpi=100)
+    plt.close()
+
+    name, ext = os.path.splitext(filename)
+    probability_filename = f'{name}_prob{ext}'
+    plt.figure(figsize=(6, 6))
+    plt.imshow(probability_map, cmap='gray', vmin=0, vmax=1)
+    plt.axis('off')
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
+    plt.savefig(os.path.join(save_path, probability_filename), bbox_inches='tight', pad_inches=0, dpi=100)
     plt.close()
 
 
@@ -352,7 +359,7 @@ class myNormalize:
         img_normalized = ((img_normalized - np.min(img_normalized))
                             / (np.max(img_normalized)-np.min(img_normalized))) * 255.
         return img_normalized, msk
-    
+
 
 class BCELoss(nn.Module):
     def __init__(self):
@@ -438,7 +445,7 @@ def calculate_metric_percase(pred, gt):
 
 
 
-def test_single_volume(image, label, net, classes, patch_size=[256, 256], 
+def test_single_volume(image, label, net, classes, patch_size=[256, 256],
                     test_save_path=None, case=None, z_spacing=1, val_or_test=False):
     image, label = image.squeeze(0).cpu().detach().numpy(), label.squeeze(0).cpu().detach().numpy()
     if len(image.shape) == 3:

@@ -12,7 +12,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Generate Branch1 prediction masks for the test split')
     parser.add_argument('--data_path', type=str, required=True, help='Path to dataset root, e.g. ./data/vessel/')
     parser.add_argument('--checkpoint_path', type=str, required=True, help='Path to Branch1 checkpoint')
-    parser.add_argument('--output_dir', type=str, default='./data/vessel/test/pred_masks', help='Output directory for raw prediction masks')
+    parser.add_argument('--output_dir', type=str, default='./data/vessel/test/pred_masks', help='Output directory for thresholded prediction masks')
     parser.add_argument('--gpu_id', type=str, default='0', help='GPU ID')
     return parser.parse_args()
 
@@ -25,7 +25,8 @@ if __name__ == '__main__':
 
     print(f'#----------Loading pretrained weights from {args.checkpoint_path}----------#')
     print(f'#----------Using device: {device}----------#')
-    print(f'#----------Saving raw prediction masks to {args.output_dir}----------#')
+    print(f'#----------Saving thresholded prediction masks to {args.output_dir}----------#')
+    print(f'#----------Saving probability maps to {args.output_dir}_prob----------#')
 
     os.makedirs(args.output_dir, exist_ok=True)
     generate_branch1_pred_masks(
