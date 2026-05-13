@@ -11,7 +11,7 @@
 CUDA_VISIBLE_DEVICES=0 python train_branch2.py \
     --batch_size 4 \
     --gpu_id "0" \
-    --epochs 5 \
+    --epochs 200 \
     --work_dir "./result_branch2/" \
     --data_path "./data/vessel/" \
     --medsam_path "./pre_trained_weights/medsam_vit_b.pth" \
