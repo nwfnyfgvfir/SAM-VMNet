@@ -138,29 +138,12 @@ class SamPredictor:
                 "An image must be set with .set_image(...) before mask prediction."
             )
 
-        # Transform input prompts
-        coords_torch, labels_torch, box_torch, mask_input_torch = None, None, None, None
-        if point_coords is not None:
-            assert (
-                point_labels is not None
-            ), "point_labels must be supplied if point_coords is supplied."
-            point_coords = self.transform.apply_coords(point_coords, self.original_size)
-            coords_torch = torch.as_tensor(
-                point_coords, dtype=torch.float, device=self.device
-            )
-            labels_torch = torch.as_tensor(
-                point_labels, dtype=torch.int, device=self.device
-            )
-            coords_torch, labels_torch = coords_torch[None, :, :], labels_torch[None, :]
-        if box is not None:
-            box = self.transform.apply_boxes(box, self.original_size)
-            box_torch = torch.as_tensor(box, dtype=torch.float, device=self.device)
-            box_torch = box_torch[None, :]
-        if mask_input is not None:
-            mask_input_torch = torch.as_tensor(
-                mask_input, dtype=torch.float, device=self.device
-            )
-            mask_input_torch = mask_input_torch[None, :, :, :]
+        coords_torch, labels_torch, box_torch, mask_input_torch = self._prepare_prompts(
+            point_coords,
+            point_labels,
+            box,
+            mask_input,
+        )
 
         masks, iou_predictions, low_res_masks = self.predict_torch(
             coords_torch,
@@ -175,6 +158,29 @@ class SamPredictor:
         iou_predictions_np = iou_predictions[0].detach().cpu().numpy()
         low_res_masks_np = low_res_masks[0].detach().cpu().numpy()
         return masks_np, iou_predictions_np, low_res_masks_np
+
+    def _prepare_prompts(
+        self,
+        point_coords: Optional[np.ndarray],
+        point_labels: Optional[np.ndarray],
+        box: Optional[np.ndarray] = None,
+        mask_input: Optional[np.ndarray] = None,
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        coords_torch, labels_torch, box_torch, mask_input_torch = None, None, None, None
+        if point_coords is not None:
+            assert point_labels is not None, "point_labels must be supplied if point_coords is supplied."
+            point_coords = self.transform.apply_coords(point_coords, self.original_size)
+            coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=self.device)
+            labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=self.device)
+            coords_torch, labels_torch = coords_torch[None, :, :], labels_torch[None, :]
+        if box is not None:
+            box = self.transform.apply_boxes(box, self.original_size)
+            box_torch = torch.as_tensor(box, dtype=torch.float, device=self.device)
+            box_torch = box_torch[None, :]
+        if mask_input is not None:
+            mask_input_torch = torch.as_tensor(mask_input, dtype=torch.float, device=self.device)
+            mask_input_torch = mask_input_torch[None, :, :, :]
+        return coords_torch, labels_torch, box_torch, mask_input_torch
 
     @torch.no_grad()
     def predict_torch(
@@ -256,6 +262,51 @@ class SamPredictor:
             masks = masks > self.model.mask_threshold
 
         return masks, iou_predictions, low_res_masks
+
+    @torch.no_grad()
+    def get_prompted_features(
+        self,
+        point_coords: Optional[np.ndarray] = None,
+        point_labels: Optional[np.ndarray] = None,
+        box: Optional[np.ndarray] = None,
+        mask_input: Optional[np.ndarray] = None,
+    ) -> torch.Tensor:
+        if not self.is_image_set:
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before prompted features can be retrieved."
+            )
+
+        coords_torch, labels_torch, box_torch, mask_input_torch = self._prepare_prompts(
+            point_coords,
+            point_labels,
+            box,
+            mask_input,
+        )
+        points = (coords_torch, labels_torch) if coords_torch is not None else None
+
+        sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
+            points=points,
+            boxes=box_torch,
+            masks=mask_input_torch,
+        )
+
+        output_tokens = torch.cat(
+            [self.model.mask_decoder.iou_token.weight, self.model.mask_decoder.mask_tokens.weight], dim=0
+        )
+        output_tokens = output_tokens.unsqueeze(0).expand(sparse_embeddings.size(0), -1, -1)
+        tokens = torch.cat((output_tokens, sparse_embeddings), dim=1)
+
+        image_embeddings = self.features
+        if image_embeddings.shape[0] != tokens.shape[0]:
+            src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+        else:
+            src = image_embeddings
+        src = src + dense_embeddings
+        pos_src = torch.repeat_interleave(self.model.prompt_encoder.get_dense_pe(), tokens.shape[0], dim=0)
+        b, c, h, w = src.shape
+
+        _, src = self.model.mask_decoder.transformer(src, pos_src, tokens)
+        return src.transpose(1, 2).view(b, c, h, w)
 
     def get_image_embedding(self) -> torch.Tensor:
         """

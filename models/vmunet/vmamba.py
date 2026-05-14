@@ -828,7 +828,7 @@ class VSSM_SAM(nn.Module):
         self.final_up = Final_PatchExpand2D(dim=dims_decoder[-1], dim_scale=4, norm_layer=norm_layer)
         self.final_conv = nn.Conv2d(dims_decoder[-1] // 4, num_classes, 1)
         self.conv_256_768 = nn.Conv2d(256, 768, 1)
-        self.pool_256 = nn.AdaptiveMaxPool2d((8, 8))
+        self.pool_256 = nn.AdaptiveAvgPool2d((8, 8))
         self.apply(self._init_weights)
 
     def _init_weights(self, m: nn.Module):

@@ -64,11 +64,11 @@ def medsam_point(imagepath, maskpath, checkpoint_path, device="cuda:0"):
 
     # 检查是否找到白色区域
     if len(x_coords) == 0:
-        tezhengxiangliang = predictor.Returnfeatures()
+        tezhengxiangliang = predictor.get_prompted_features().detach().cpu()
         return tezhengxiangliang, False
 
     # 将坐标组合成一个numpy数组，每个坐标是一个[x, y]格式的列表
-    points = np.array(list(zip(x_coords, y_coords)))
+    points = np.array(list(zip(x_coords, y_coords)), dtype=np.float32)
 
     # 计算列表的长度
     total_points = len(points)
@@ -80,17 +80,13 @@ def medsam_point(imagepath, maskpath, checkpoint_path, device="cuda:0"):
         # 使用列表切片按等间隔取点
         sampled_points = points[::skip_interval][:n_points]
     else:
-        sampled_points = np.array([])
+        sampled_points = np.empty((0, 2), dtype=np.float32)
 
     input_point = sampled_points
-    input_label = np.ones(len(input_point))
+    input_label = np.ones(len(input_point), dtype=np.int32)
 
-    # 预测
-    masks, _, _ = predictor.predict(
+    tezhengxiangliang = predictor.get_prompted_features(
         point_coords=input_point,
         point_labels=input_label,
-        multimask_output=False,
-    )
-
-    tezhengxiangliang = predictor.Returnfeatures()
+    ).detach().cpu()
     return tezhengxiangliang, True

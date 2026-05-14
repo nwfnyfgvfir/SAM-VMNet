@@ -13,7 +13,7 @@ SPLIT="${1:-test}"
 
 CUDA_VISIBLE_DEVICES=0 python test_branch2.py \
     --data_path "./data/vessel/" \
-    --checkpoint_path "./pre_trained_weights/best-epoch169-loss0.3444.pth" \
+    --checkpoint_path "./pre_trained_weights/best-epoch158-loss0.3476.pth" \
     --work_dir "./result_branch2_${SPLIT}/" \
     --gpu_id "0" \
     --medsam_path "./pre_trained_weights/medsam_vit_b.pth" \

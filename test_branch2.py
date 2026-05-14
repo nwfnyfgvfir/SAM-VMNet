@@ -70,6 +70,8 @@ if __name__ == '__main__':
     config.data_path = args.data_path
     config.gpu_id = args.gpu_id
     config.batch_size = 1
+    config.medsam_path = args.medsam_path
+    config.branch1_model_path = args.branch1_model_path
 
     gpu_id = int(config.gpu_id)
     device = torch.device(f'cuda:{gpu_id}' if torch.cuda.is_available() else 'cpu')
