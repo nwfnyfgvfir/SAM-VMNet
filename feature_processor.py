@@ -17,7 +17,7 @@ SPLITS = ('train', 'val', 'test')
 def _list_files(directory):
     return sorted([
         file_name for file_name in os.listdir(directory)
-        if os.path.isfile(os.path.join(directory, file_name))
+        if os.path.isfile(os.path.join(directory, file_name)) and not file_name.endswith(':Zone.Identifier')
     ])
 
 

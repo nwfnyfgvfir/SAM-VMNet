@@ -71,8 +71,6 @@ def val_one_epoch(test_loader,
     loss_list = []
     with torch.no_grad():
         for data in tqdm(test_loader):
-            # feature = torch.randn(1, 256, 64, 64)
-
             img, msk, feature = data
             img = img.to(device, non_blocking=True).float()
             msk = msk.to(device, non_blocking=True).float()
@@ -87,33 +85,35 @@ def val_one_epoch(test_loader,
             out = out.squeeze(1).cpu().detach().numpy()
             preds.append(out)
 
-    if epoch % config.val_interval == 0:
-        preds = np.array(preds).reshape(-1)
-        gts = np.array(gts).reshape(-1)
+    preds = np.array(preds).reshape(-1)
+    gts = np.array(gts).reshape(-1)
 
-        y_pre = np.where(preds >= config.threshold, 1, 0)
-        y_true = np.where(gts >= 0.5, 1, 0)
+    y_pre = np.where(preds >= config.threshold, 1, 0)
+    y_true = np.where(gts >= 0.5, 1, 0)
 
-        confusion = confusion_matrix(y_true, y_pre)
-        TN, FP, FN, TP = confusion[0, 0], confusion[0, 1], confusion[1, 0], confusion[1, 1]
+    confusion = confusion_matrix(y_true, y_pre, labels=[0, 1])
+    TN, FP, FN, TP = confusion[0, 0], confusion[0, 1], confusion[1, 0], confusion[1, 1]
 
-        accuracy = float(TN + TP) / float(np.sum(confusion)) if float(np.sum(confusion)) != 0 else 0
-        sensitivity = float(TP) / float(TP + FN) if float(TP + FN) != 0 else 0
-        specificity = float(TN) / float(TN + FP) if float(TN + FP) != 0 else 0
-        f1_or_dsc = float(2 * TP) / float(2 * TP + FP + FN) if float(2 * TP + FP + FN) != 0 else 0
-        miou = float(TP) / float(TP + FP + FN) if float(TP + FP + FN) != 0 else 0
+    metrics = {
+        'loss': float(np.mean(loss_list)),
+        'miou': float(TP) / float(TP + FP + FN) if float(TP + FP + FN) != 0 else 0,
+        'f1_or_dsc': float(2 * TP) / float(2 * TP + FP + FN) if float(2 * TP + FP + FN) != 0 else 0,
+        'accuracy': float(TN + TP) / float(np.sum(confusion)) if float(np.sum(confusion)) != 0 else 0,
+        'specificity': float(TN) / float(TN + FP) if float(TN + FP) != 0 else 0,
+        'sensitivity': float(TP) / float(TP + FN) if float(TP + FN) != 0 else 0,
+        'confusion_matrix': confusion,
+    }
 
-        log_info = f'val epoch: {epoch}, loss: {np.mean(loss_list):.4f}, miou: {miou}, f1_or_dsc: {f1_or_dsc}, accuracy: {accuracy}, \
-                specificity: {specificity}, sensitivity: {sensitivity}, confusion_matrix: {confusion}'
-        print(log_info)
-        logger.info(log_info)
+    log_info = (
+        f"val epoch: {epoch}, loss: {metrics['loss']:.4f}, miou: {metrics['miou']}, "
+        f"f1_or_dsc: {metrics['f1_or_dsc']}, accuracy: {metrics['accuracy']}, "
+        f"specificity: {metrics['specificity']}, sensitivity: {metrics['sensitivity']}, "
+        f"confusion_matrix: {metrics['confusion_matrix']}"
+    )
+    print(log_info)
+    logger.info(log_info)
 
-    else:
-        log_info = f'val epoch: {epoch}, loss: {np.mean(loss_list):.4f}'
-        print(log_info)
-        logger.info(log_info)
-
-    return np.mean(loss_list)
+    return metrics
 
 
 def test_one_epoch(test_loader,

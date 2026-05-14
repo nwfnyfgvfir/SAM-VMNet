@@ -13,9 +13,16 @@ from scipy import ndimage
 from PIL import Image
 
 
+def _list_files(directory):
+    return sorted([
+        file_name for file_name in os.listdir(directory)
+        if not file_name.endswith(':Zone.Identifier')
+    ])
+
+
 def _collect_image_mask_pairs(image_dir, mask_dir):
-    image_files = sorted(os.listdir(image_dir))
-    mask_map = {os.path.splitext(file_name)[0]: file_name for file_name in os.listdir(mask_dir)}
+    image_files = _list_files(image_dir)
+    mask_map = {os.path.splitext(file_name)[0]: file_name for file_name in _list_files(mask_dir)}
 
     pairs = []
     missing_masks = []
@@ -86,9 +93,9 @@ class Branch2_datasets(Dataset):
         mask_dir = path_Data + f'{split}/masks/'
         feature_dir = path_Data + f'{split}/feature/'
 
-        image_files = sorted(os.listdir(image_dir))
-        mask_map = {os.path.splitext(file_name)[0]: file_name for file_name in os.listdir(mask_dir)}
-        feature_map = {os.path.splitext(file_name)[0]: file_name for file_name in os.listdir(feature_dir)}
+        image_files = _list_files(image_dir)
+        mask_map = {os.path.splitext(file_name)[0]: file_name for file_name in _list_files(mask_dir)}
+        feature_map = {os.path.splitext(file_name)[0]: file_name for file_name in _list_files(feature_dir)}
 
         self.data = []
         missing_masks = []

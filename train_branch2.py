@@ -41,6 +41,8 @@ def main(config, args):
     config.batch_size = args.batch_size
     config.gpu_id = args.gpu_id
     config.epochs = args.epochs
+    config.medsam_path = args.medsam_path
+    config.branch1_model_path = args.branch1_model_path
 
     medsam_model_path = args.medsam_path
     branch1_model_path = args.branch1_model_path
@@ -120,9 +122,11 @@ def main(config, args):
     scheduler = get_scheduler(config, optimizer)
 
     print('#----------Set other params----------#')
-    min_loss = 999
+    best_loss = float('inf')
+    best_miou = -1.0
+    best_f1 = -1.0
     start_epoch = 1
-    min_epoch = 1
+    best_epoch = 1
 
     if os.path.exists(resume_model):
         print('#----------Resume Model and Other params----------#')
@@ -132,9 +136,17 @@ def main(config, args):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         saved_epoch = checkpoint['epoch']
         start_epoch += saved_epoch
-        min_loss, min_epoch, loss = checkpoint['min_loss'], checkpoint['min_epoch'], checkpoint['loss']
+        best_loss = checkpoint.get('best_loss', checkpoint.get('min_loss', float('inf')))
+        best_epoch = checkpoint.get('best_epoch', checkpoint.get('min_epoch', 1))
+        best_miou = checkpoint.get('best_miou', -1.0)
+        best_f1 = checkpoint.get('best_f1_or_dsc', checkpoint.get('best_f1', -1.0))
+        loss = checkpoint['loss']
 
-        log_info = f'resuming model from {resume_model}. resume_epoch: {saved_epoch}, min_loss: {min_loss:.4f}, min_epoch: {min_epoch}, loss: {loss:.4f}'
+        log_info = (
+            f'resuming model from {resume_model}. resume_epoch: {saved_epoch}, '
+            f'best_loss: {best_loss:.4f}, best_epoch: {best_epoch}, '
+            f'best_miou: {best_miou:.4f}, best_f1_or_dsc: {best_f1:.4f}, loss: {loss:.4f}'
+        )
         logger.info(log_info)
 
     step = 0
@@ -159,7 +171,7 @@ def main(config, args):
             device
         )
         train_losses.append(train_loss)
-        loss = val_one_epoch(
+        val_metrics = val_one_epoch(
             val_loader,
             model,
             criterion,
@@ -168,18 +180,32 @@ def main(config, args):
             config,
             device
         )
-        val_losses.append(loss)
-        if loss < min_loss:
+        val_loss = val_metrics['loss']
+        val_miou = val_metrics['miou']
+        val_f1 = val_metrics['f1_or_dsc']
+        val_losses.append(val_loss)
+
+        if (
+            val_f1 > best_f1 or
+            (val_f1 == best_f1 and val_miou > best_miou) or
+            (val_f1 == best_f1 and val_miou == best_miou and val_loss < best_loss)
+        ):
             torch.save(model.state_dict(), os.path.join(checkpoint_dir, 'best.pth'))
-            min_loss = loss
-            min_epoch = epoch
+            best_loss = val_loss
+            best_miou = val_miou
+            best_f1 = val_f1
+            best_epoch = epoch
 
         torch.save(
             {
                 'epoch': epoch,
-                'min_loss': min_loss,
-                'min_epoch': min_epoch,
-                'loss': loss,
+                'min_loss': best_loss,
+                'min_epoch': best_epoch,
+                'best_loss': best_loss,
+                'best_epoch': best_epoch,
+                'best_miou': best_miou,
+                'best_f1_or_dsc': best_f1,
+                'loss': val_loss,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
@@ -199,7 +225,7 @@ def main(config, args):
         )
         os.rename(
             os.path.join(checkpoint_dir, 'best.pth'),
-            os.path.join(checkpoint_dir, f'best-epoch{min_epoch}-loss{min_loss:.4f}.pth')
+            os.path.join(checkpoint_dir, f'best-epoch{best_epoch}-loss{best_loss:.4f}.pth')
         )
     return train_losses, val_losses
 
